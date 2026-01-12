@@ -18,7 +18,7 @@ def main():
     # Initialize Agent
     agent = AgentRuntime(
         tools=[scraper, retriever],
-        model_path="D:\\AI_Models\\mistral-7b-instruct-v0.2.Q4_K_M.gguf"
+        model_path="D:\\precision_farming\\models\\mistral-7b-instruct-v0.2.Q4_K_M.gguf"
     )
     
     print("Agent Ready.")
