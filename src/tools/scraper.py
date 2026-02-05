@@ -12,7 +12,11 @@ class ScraperTool(BaseTool):
         "icar.org.in",
         "ipm.ucanr.edu",
         "extension.psu.edu",
-        "cals.cornell.edu"
+        "cals.cornell.edu",
+        "extension.org",
+        "garden.org",
+        ".edu",
+        ".ac.uk"
     ]
 
     def __init__(self, whitelist: List[str] = None, allow_any: bool = False):

@@ -82,6 +82,22 @@ if prompt := st.chat_input("What would you like to know?"):
                     st.json(result)
                     # Convert to string for storage
                     response_str = json.dumps(result, indent=2)
+
+                    # --- VERBOSE LOGS EXPANDER ---
+                    with st.expander("Show Research Logs (Verified Sources)"):
+                        st.write("The agent checked the following sources:")
+                        # If result has source_citations (from schema)
+                        if isinstance(result, dict):
+                            sources = result.get("recipe", {}).get("source_citations", [])
+                            # Or if it's the raw result before parsing
+                            if not sources:
+                                sources = result.get("source_citations", [])
+                            
+                            if sources:
+                                for s in sources:
+                                    st.write(f"- {s}")
+                            else:
+                                st.write("No external web sources were cited in the final output.")
                 else:
                     st.markdown(str(result))
                     response_str = str(result)

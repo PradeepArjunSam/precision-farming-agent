@@ -199,7 +199,8 @@ class AgentRuntime:
             "2. NO PRIOR KNOWLEDGE: Do NOT use your training data. If the Context lacks information, you MUST refuse.\n"
             "3. REFUSAL PRIORITY: If Context is empty or insufficient, return: "
             '{"error": "DATA_NOT_AVAILABLE", "message": "Insufficient verified information for this query."}\n'
-            "4. SOURCE TRACING: Every fact must be traceable to a source_citation from the Context.\n\n"
+            "4. SOURCE TRACING: Every fact must be traceable to a source_citation from the Context.\n"
+            "5. NO SUBSTITUTION: If the Context is for a DIFFERENT crop than requested (e.g. Corn vs Peppers), IGNORE IT. Do NOT substitute data.\n\n"
             
             "## OUTPUT FORMAT:\n"
             "Below is an example recipe for a DIFFERENT crop. Use this to learn the JSON STRUCTURE and STYLE, "

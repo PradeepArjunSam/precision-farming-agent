@@ -26,7 +26,8 @@ class SearchTool(BaseTool):
         whitelist_operators = " OR ".join([f"site:{d}" for d in self.scraper.whitelist])
         strict_query = f"{query} ({whitelist_operators})"
         
-        print(f"  > Searching web (Strict): {strict_query[:50]}...")
+        print(f"\n[SearchTool] VERBOSE: Executing Strict Query: {strict_query}")
+        print(f"[SearchTool] VERBOSE: Whitelist contains {len(self.scraper.whitelist)} domains/extensions.")
         
         try:
             # 1. Search (Limit to 3 results)
