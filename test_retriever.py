@@ -6,7 +6,7 @@ def test_retriever():
     print("Testing Retriever Tool...")
     
     # Use a test DB path (cleanup before test)
-    test_db_path = "D:\\precision_farming\\data\\test_chroma"
+    test_db_path = "data/test_chroma"
     if os.path.exists(test_db_path):
         shutil.rmtree(test_db_path)
     

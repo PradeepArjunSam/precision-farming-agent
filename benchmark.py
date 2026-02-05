@@ -24,10 +24,10 @@ def benchmark_agent():
     start_init = time.time()
     
     scraper = ScraperTool(whitelist=["fao.org", "usda.gov"])
-    retriever = RetrieverTool(db_path="D:\\precision_farming\\data\\chroma")
+    retriever = RetrieverTool(db_path="data/chroma")
     agent = AgentRuntime(
         tools=[scraper, retriever],
-        model_path="D:\\precision_farming\\models\\mistral-7b-instruct-v0.2.Q4_K_M.gguf"
+        model_path="models/mistral-7b-instruct-v0.2.Q4_K_M.gguf"
     )
     
     init_time = time.time() - start_init

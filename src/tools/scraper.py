@@ -15,8 +15,9 @@ class ScraperTool(BaseTool):
         "cals.cornell.edu"
     ]
 
-    def __init__(self, whitelist: List[str] = None):
+    def __init__(self, whitelist: List[str] = None, allow_any: bool = False):
         self.whitelist = whitelist if whitelist else self.DEFAULT_WHITELIST
+        self.allow_any = allow_any
         self._session = requests.Session()
         self._session.headers.update({
             "User-Agent": "PrecisionFarmingAgent/1.0 (Research Purpose; +http://github.com/example/bot)"
@@ -36,6 +37,8 @@ class ScraperTool(BaseTool):
     def _is_whitelisted(self, url: str) -> bool:
         try:
             domain = urlparse(url).netloc.lower()
+            if self.allow_any:
+                return True
             # Handle subdomains, e.g., www.fao.org matches fao.org
             return any(domain.endswith(allowed) or domain == allowed for allowed in self.whitelist)
         except Exception:

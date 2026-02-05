@@ -5,7 +5,7 @@ import os
 
 def check_db():
     print("Checking ChromaDB content...")
-    db_path = "D:\\precision_farming\\data\\chroma"
+    db_path = "data/chroma"
     
     if not os.path.exists(db_path):
         print(f"❌ DB Path does not exist: {db_path}")

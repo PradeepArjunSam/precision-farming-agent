@@ -21,7 +21,7 @@ def run_ingestion():
     print("Initializing Ingestion Pipeline...")
     
     scraper = ScraperTool()
-    retriever = RetrieverTool(db_path="D:\\precision_farming\\data\\chroma")
+    retriever = RetrieverTool(db_path="data/chroma")
     loader = DocumentLoader(storage_path="") # Path not used in v1 loader
     
     # 1. Scrape & Ingest Real URLs

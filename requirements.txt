@@ -7,3 +7,5 @@ huggingface_hub
 llama-cpp-python
 requests
 beautifulsoup4
+streamlit
+duckduckgo-search

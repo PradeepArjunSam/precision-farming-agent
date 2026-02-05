@@ -8,16 +8,43 @@ try:
 except ImportError:
     InferenceClient = None
 
+try:
+    from llama_cpp import Llama
+except ImportError:
+    Llama = None
+
 from ..tools.base import BaseTool
 
 # --- Output Schema ---
+class Quantity(BaseModel):
+    unit: str = Field(..., description="Unit of measurement (e.g., 'lbs/acre', 'kg/ha', 'mm')")
+    value: Optional[float] = Field(None, description="Numerical value")
+
+class Ingredient(BaseModel):
+    name: str = Field(..., description="Name of input (e.g., 'Corn Nitrogen Application')")
+    quantity: Quantity = Field(..., description="Amount required")
+    stage: str = Field(..., description="Growth stage for application")
+
+class Instruction(BaseModel):
+    step: int = Field(..., description="Step number")
+    description: str = Field(..., description="Detailed instruction")
+
+class Task(BaseModel):
+    task: str = Field(..., description="Short task name")
+    ingredient: Optional[str] = Field(None, description="Name of related ingredient if any")
+
+class TimetableEntry(BaseModel):
+    period: str = Field(..., description="Time period (e.g., 'Day 1', 'Week 4')")
+    tasks: List[Task] = Field(..., description="List of tasks for this period")
+
+class Recipe(BaseModel):
+    name: str = Field(..., description="Descriptive title of the recipe")
+    ingredients: List[Ingredient] = Field(..., description="List of inputs needed")
+    instructions: List[Instruction] = Field(..., description="Step-by-step guide")
+    timetable: List[TimetableEntry] = Field(..., description="Chronological schedule")
+
 class AgronomyRecipe(BaseModel):
-    crop: str = Field(..., description="Name of the crop")
-    growth_stage: str = Field(..., description="Stage of growth (e.g., Seedling, Vegetative)")
-    recommended_actions: List[str] = Field(..., description="List of specific actions to take")
-    environmental_parameters: Dict[str, str] = Field(..., description="Key-value pairs of required conditions (e.g., 'Temp': '20-25C')")
-    source_citations: List[str] = Field(..., description="List of sources used")
-    confidence_score: float = Field(..., description="Confidence from 0.0 to 1.0")
+    recipe: Recipe = Field(..., description="The complete agronomy recipe")
 
 class AgentRuntime:
     def __init__(self, tools: list[BaseTool], model_path: str = None):
@@ -33,22 +60,35 @@ class AgentRuntime:
             print(f"Warning: Golden examples not found at {examples_path}, using default example")
             self.golden_examples = []
         
-        # Initialize HuggingFace Client
-        print("Initializing HuggingFace Inference Client...")
+        self.model_path = model_path
+        self.llm = None
+        
+        if self.model_path:
+            print(f"Loading local model from {self.model_path}...")
+            if Llama:
+                self.llm = Llama(
+                    model_path=self.model_path,
+                    n_ctx=4096,
+                    n_threads=4, # Adjust based on CPU
+                    verbose=False
+                )
+                print("[OK] Local model loaded.")
+            else:
+                print("[!] llama-cpp-python not installed. Cannot load local model.")
+        
+        # Initialize HuggingFace Client (Fallback)
+        print("Initializing HuggingFace Inference Client (Fallback)...")
         
         # Try to get token from env, otherwise fail later or ask
         self.token = os.environ.get("HF_TOKEN")
         
-        if not self.token:
-            print("[!] HF_TOKEN environment variable not set.")
-            # We will handle this by checking in execute() or just letting it fail with a clear message
+        if self.token:
+             if InferenceClient:
+                self.client = InferenceClient(token=self.token)
+             else:
+                print("huggingface_hub is not installed.")
         else:
-            print("[OK] HF_TOKEN found.")
-
-        if InferenceClient:
-            self.client = InferenceClient(token=self.token)
-        else:
-            raise RuntimeError("huggingface_hub is not installed. Please run `pip install huggingface_hub`")
+             print("[!] HF_TOKEN environment variable not set. Will rely on local model if available.")
 
     def _select_cross_domain_example(self, user_query: str) -> Dict[str, Any]:
         """
@@ -58,12 +98,25 @@ class AgentRuntime:
         if not self.golden_examples:
             # Fallback default example
             return {
-                "crop": "Tomato",
-                "growth_stage": "Seedling",
-                "recommended_actions": ["Provide 14-16 hours of light", "Keep soil moist"],
-                "environmental_parameters": {"Light": "14-16h", "Temp": "20-25C"},
-                "source_citations": ["fao.org/tomato"],
-                "confidence_score": 0.95
+                "recipe": {
+                    "name": "Tomato Seedling Care Schedule",
+                    "ingredients": [
+                        {
+                            "name": "Water",
+                            "quantity": {"unit": "mm/week", "value": 25},
+                            "stage": "Seedling"
+                        }
+                    ],
+                    "instructions": [
+                        {"step": 1, "description": "Keep soil consistently moist but not waterlogged."}
+                    ],
+                    "timetable": [
+                        {
+                            "period": "Week 1",
+                            "tasks": [{"task": "Water daily", "ingredient": "Water"}]
+                        }
+                    ]
+                }
             }
         
         # Extract crop names from query (simple keyword matching)
@@ -86,10 +139,15 @@ class AgentRuntime:
 
     def plan(self, user_query: str) -> list[str]:
         """
-        Naive planner: Always retrieve for now.
-        Future: Use LLM to decide if we need to Scrape new data vs Retrieve.
+        Dynamically plan based on available tools.
+        If we have search, use it.
         """
-        return ["retriever_tool"]
+        plan = []
+        if "search_tool" in self.tools:
+            plan.append("search_tool")
+        if "retriever_tool" in self.tools:
+            plan.append("retriever_tool")
+        return plan
 
     def _format_context(self, tool_results: List[Dict[str, Any]]) -> str:
         context_str = ""
@@ -150,47 +208,75 @@ class AgentRuntime:
             
             "## INSTRUCTIONS:\n"
             "- Use the STRUCTURE from the example above (JSON keys, level of detail)\n"
-            "- Extract FACTS from the Context below (not from the example)\n"
-            "- Be SPECIFIC: Include numbers, units, ranges (e.g., '14-16 hours', '400 µmol/m²/s')\n"
-            "- Cite sources from Context in 'source_citations' field\n"
-            "- Set 'confidence_score' based on Context completeness (0.0-1.0)\n"
-            "- IMPORTANT: Output ONLY valid JSON. No markdown formatting, no explanations.\n"
+            "- EXTRACT FACTS from the Context below.\n"
+            "- 'ingredients': List all inputs (fertilizer, water) with specific QUANTITY and UNIT.\n"
+            "- 'instructions': Step-by-step application guide.\n"
+            "- 'timetable': Link tasks to specific periods (Day X, Week Y).\n"
+            "- IMPORTANT: Output ONLY valid JSON matching the Example structure.\n"
         )
         
         user_message = (
             f"Context:\n{retrieved_context}\n"
             f"User Query: {user_query}\n\n"
-            "Generate the JSON recipe."
+            "Generate the detailed JSON recipe."
         )
 
-        # 5. Inference (HuggingFace API)
-        print("  > Synthesizing Answer with HuggingFace API...")
-        if not self.token:
-             return {
-                "error": "AUTH_REQUIRED",
-                "message": "HuggingFace Token (HF_TOKEN) is missing. Please provide it."
-            }
-
+        # 5. Inference
+        print("  > Synthesizing Answer...")
+        
         try:
-            # We use Mistral-7B-Instruct-v0.2 as the default free model
-            response = self.client.chat_completion(
-                model="mistralai/Mistral-7B-Instruct-v0.2", 
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_message}
-                ],
-                temperature=0.0,
-                max_tokens=1024,
-                response_format={"type": "json_object"} # Try to enforce JSON
-            )
-            content = response.choices[0].message.content
+            # 1. Try HuggingFace API First
+            if self.token and self.client:
+                print("  > Using HuggingFace API...")
+                try:
+                    response = self.client.chat_completion(
+                        model="microsoft/Phi-3-mini-4k-instruct", 
+                        messages=[
+                            {"role": "system", "content": system_prompt},
+                            {"role": "user", "content": user_message}
+                        ],
+                        temperature=0.0,
+                        max_tokens=1024,
+                        response_format={"type": "json_object"} 
+                    )
+                    content = response.choices[0].message.content
+                except Exception as e:
+                    print(f"  > HF API Failed: {e}")
+                    if not self.llm:
+                        raise e # Re-raise if no fallback
+                    print("  > Falling back to Local Model...")
+                    content = None # Signal to try fallback
+
+            # 2. Key Fallback: Local Model
+            if (not self.token or not self.client or content is None) and self.llm:
+                print("  > Using Local Model (Llama CPP)...")
+                response = self.llm.create_chat_completion(
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_message}
+                    ],
+                    temperature=0.0,
+                    # max_tokens=1024, # LlamaCPP uses max_tokens differently or defaults
+                    response_format={"type": "json_object"}
+                )
+                content = response["choices"][0]["message"]["content"]
+            
+            elif (not self.token or not self.client) and not self.llm:
+                 return {
+                    "error": "NO_INFERENCE_ENGINE",
+                    "message": "Neither HuggingFace Token nor Local Model available."
+                }
         except Exception as e:
             print(f"  > Error during inference: {e}")
             return {
                 "error": "INFERENCE_FAILED",
                 "details": str(e)
             }
-        
+            
+        # Skip original Hf logic since we handled it above
+        if False:
+             pass
+
         # 6. Schema Validation
         try:
             # Clean up potential markdown code blocks if the model adds them
@@ -203,8 +289,15 @@ class AgentRuntime:
             recipe = AgronomyRecipe(**data)
             return recipe.model_dump()
         except Exception as e:
-            return {
-                "error": "SCHEMA_VIOLATION",
-                "raw_output": content,
-                "details": str(e)
-            }
+            # Fallback: Return raw output if schema validation fails
+            # This ensures the user sees the answer even if the model didn't follow strict JSON
+            print(f"  > Schema Validation Failed: {e}")
+            try:
+                # Try to return it as a dict if it was valid JSON but wrong schema
+                return json.loads(content)
+            except:
+                # Return as raw text wrapper
+                return {
+                    "raw_answer": content,
+                    "validation_error": str(e)
+                }

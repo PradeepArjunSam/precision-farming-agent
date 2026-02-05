@@ -37,8 +37,16 @@ def populate():
         }
     ]
     
-    client = chromadb.PersistentClient(path="D:\\precision_farming\\data\\chroma")
-    col = client.get_or_create_collection("agronomy_knowledge")
+    from chromadb.utils import embedding_functions
+    embedding_fn = embedding_functions.SentenceTransformerEmbeddingFunction(
+        model_name="all-MiniLM-L6-v2"
+    )
+    
+    client = chromadb.PersistentClient(path="data/chroma")
+    col = client.get_or_create_collection(
+        name="agronomy_knowledge",
+        embedding_function=embedding_fn
+    )
     
     # Add to DB
     ids = [str(uuid.uuid4()) for _ in data]

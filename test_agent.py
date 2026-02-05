@@ -87,7 +87,7 @@ def main():
     # Initialize Tools
     print("Setting up tools...")
     scraper = ScraperTool(whitelist=["fao.org", "usda.gov"])
-    retriever = RetrieverTool(db_path="D:\\precision_farming\\data\\chroma")
+    retriever = RetrieverTool(db_path="data/chroma")
     
     # Initialize Agent
     print("Loading agent runtime...")
